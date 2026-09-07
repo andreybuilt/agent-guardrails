@@ -103,7 +103,7 @@ cp agent-guardrails/hooks/* ~/.claude/hooks/
 chmod +x ~/.claude/hooks/*
 ```
 
-`guard-find.sh` needs `jq`. The Python hooks need only the standard library.
+`guard-find.sh` needs `jq` and `python3`. Every Python hook needs only the standard library.
 
 ### Configuration
 
@@ -133,6 +133,30 @@ wrong-allow. Each case entered the battery after a bypass got through, so they a
 tests rather than illustrations. The battery covers newline-separated segments, `&&`/`||`/`;`/`|`
 sequencing, redirect targets, `env`/`sudo`/`nice` wrapper prefixes, `$()` and heredocs, and quoted
 strings that only look dangerous (`echo 'rm -rf /'` has to stay allowed).
+
+---
+
+## Known bypasses, stated because they are still open
+
+Re-tested 2026-09-07 against shapes an internal audit had recorded. Some were already fixed, one
+I fixed that day, and these are the ones that still work. A guard set with no published bypass
+list has either not been attacked or is not telling you.
+
+| Hook | Shape that gets through | Why |
+|---|---|---|
+| `guard-sequenced-precondition.py` | `sh -c '...'`, `bash -c '...'`, `ssh host '...'`, a single `&`, `check \|\| true ; work` | Only the first operator at the top level is examined. A wrapper hides the sequence inside an argument. 7 of 8 audited shapes still work. |
+| `bash-approver.py` | `git log --output=FILE`, `git diff --output=FILE`, `file -C -m FILE` | Read-only-looking subcommands that write through a flag the redirect analysis does not model. `sort -o` was the same class and is fixed. |
+| `bash-approver.py` | `echo $SECRET` | It models side effects, not disclosure. The source says so; it is a design boundary rather than an oversight, and it is the gap I would close next. |
+| `orphan-tooling-guard.py` | `.pl`, `.rb`, extensionless executables | It hashes `.sh` and `.py` only, so tooling in another language is invisible to it. |
+| `guard-agent-model.py` | `model="inherit"`, `model="banana"` | It requires a non-empty model and does not validate the value. `inherit` reaches the outcome the hook exists to discourage while satisfying the letter of it. Arguable as a design choice; listed so you can decide for yourself. |
+
+**Fixed on 2026-09-07, and worth the detail because both halves were wrong at once.**
+`guard-find.sh` allowed `find . -name '*.py' '-delete'`: the flag match required whitespace in front of
+the flag, and a quote is not whitespace. The same hook blocked a report that merely quoted the
+flag in order to describe it. Stripping quotes fixes the first and worsens the second, so it now
+drops quoted spans containing whitespace (sentences), unquotes those that do not (arguments), and
+searches only what follows a `find` in command position. Thirteen cases, six of them cases it must
+allow.
 
 ---
 

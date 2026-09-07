@@ -22,6 +22,14 @@ else
 fi
 
 echo
+echo "== guard-find matrix =="
+if ./tests/test-guard-find.sh; then
+  echo "  guard-find matrix passed"
+else
+  echo "  GUARD-FIND MATRIX FAILED"; fail=1
+fi
+
+echo
 echo "== guard-git matrix =="
 if ./tests/test-guard-git.sh; then
   echo "  guard-git matrix passed"
