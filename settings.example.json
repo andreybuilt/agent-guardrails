@@ -1,0 +1,21 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          { "type": "command", "command": "$HOME/.claude/hooks/bash-approver.py" },
+          { "type": "command", "command": "$HOME/.claude/hooks/guard-find.sh" },
+          { "type": "command", "command": "$HOME/.claude/hooks/guard-sequenced-precondition.py" },
+          { "type": "command", "command": "$HOME/.claude/hooks/orphan-tooling-guard.py" }
+        ]
+      },
+      {
+        "matcher": "Agent",
+        "hooks": [
+          { "type": "command", "command": "$HOME/.claude/hooks/guard-agent-model.py" }
+        ]
+      }
+    ]
+  }
+}
