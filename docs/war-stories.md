@@ -105,9 +105,43 @@ size it. Two lines of rule, written because a default is not a decision.
 
 ---
 
-## The pattern across all five
+## 6. Sixty-two commits stranded, and the guard that first blocked the cleanup
 
-Four of these five failures show a correct check wired to the wrong thing: parsed with the wrong
+**The loss.** On 2026-08-19, 62 commits ended up stranded across 8 branches. A git command did
+that, not a disk fault.
+
+**Why a deny rule was the wrong answer.** The obvious fix refuses `git worktree remove` outright.
+That version left an orchestrator lane stuck in five consecutive permission blocks on a worktree
+that was provably empty: nothing uncommitted, nothing off main. A guard that blocks safe work
+teaches people to route around it, and then it protects nothing.
+
+**The fix.** `guard-git.py` inspects the REPOSITORY rather than the command string. It runs
+`git status --porcelain`, compares the branch against main, and gets out of the way when there is
+nothing to lose. `git push --force` is the one exception it blocks unconditionally, because
+rewriting history other people may already hold is a decision a human should make.
+
+**Two false positives, both caught on its first day in service, both now pinned by tests.**
+
+The first draft blocked `worktree remove` when the branch held commits not on main. That guards a
+loss which cannot happen: removing a worktree deletes the directory and deregisters it, while the
+branch and its commits stay in the repository. Only `git branch -D` discards commits. Treating
+"stranded" as "destroyed" made the guard block ordinary cleanup.
+
+The second: counting every dirty row for `reset --hard` blocked on an untracked directory that
+`reset --hard` would never have touched. The two commands destroy different things. `reset --hard`
+reverts tracked changes and leaves untracked files alone; `clean -f` deletes untracked files and
+leaves tracked ones alone. Conflating them made one guard both over- and under-protective at once.
+
+**A sibling hook taught the third lesson.** An earlier guard blocked a COMMIT MESSAGE that quoted
+the anti-pattern in order to describe it. A guard that blocks writing about a hazard teaches people
+to stop writing about it, so this one strips quoted spans before matching:
+`git commit -m "removed the worktree"` is a commit, not a removal.
+
+---
+
+## The pattern across all six
+
+Five of these six failures show a correct check wired to the wrong thing: parsed with the wrong
 tokenizer, sequenced with the wrong operator, matched on the wrong attribute, defaulted instead of
 chosen. The agent behaved reasonably in each one.
 

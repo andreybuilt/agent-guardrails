@@ -22,6 +22,14 @@ else
 fi
 
 echo
+echo "== guard-git matrix =="
+if ./tests/test-guard-git.sh; then
+  echo "  guard-git matrix passed"
+else
+  echo "  GUARD-GIT MATRIX FAILED"; fail=1
+fi
+
+echo
 echo "== no leaked identifiers =="
 # Built at run time so this file never itself contains a real identifier, and so a fork
 # checks ITS author's name rather than ours. Override with GUARD_LEAK_RE to add your own.

@@ -1,6 +1,6 @@
 # agent-guardrails
 
-Five PreToolUse hooks that refuse unsafe actions **at the call site**, before a coding agent
+Six PreToolUse hooks that refuse unsafe actions **at the call site**, before a coding agent
 executes them. Each one returns exit 2 and stops the call.
 
 Every hook here runs in production against a real agent workload. The numbers below come from its
@@ -74,6 +74,7 @@ sometimes.
 | `guard-find.sh` | Any `find` carrying `-delete`, `-exec`, `-execdir`, `-ok`, `-okdir`, `-fprint`, `-fprintf`, `-fls`. | 30 |
 | `guard-sequenced-precondition.py` | A precondition check followed by `;` or a newline, or piped into anything. Both shapes destroy its exit status. | 158 |
 | `guard-agent-model.py` | A subagent spawn with no explicit `model`, which silently inherits the parent's (usually the most expensive one available). | 66 |
+| `guard-git.py` | Five git operations that discard work, **and only when work would actually be lost**: `push --force` always; `reset --hard` with tracked changes; `clean -f` with untracked files; `branch -D` holding unmerged commits; `worktree remove --force` on a dirty tree. | 153 |
 | `orphan-tooling-guard.py` | Session-scoped executables written to `/tmp` that exist nowhere in the work tree. Matches on **content hash, not filename**, so a rescue that renames the file still counts. | 303 |
 
 ### Why a hook rather than a permission rule
@@ -115,6 +116,11 @@ chmod +x ~/.claude/hooks/*
 ```bash
 ./tests/run-all.sh
 ```
+
+`guard-git.py` carries a **13-case matrix** in `tests/test-guard-git.sh` that builds real
+temporary repositories and drives the hook through both halves of every rule: six commands it
+must refuse, and seven wrongly-satisfied twins it must allow. Three of those seven are false
+positives the hook shipped with and had fixed within a day.
 
 `bash-approver.py --selftest` runs an **85-case adversarial battery** and exits non-zero on any
 wrong-allow. Each case entered the battery after a bypass got through, so they are regression
