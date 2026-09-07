@@ -23,8 +23,15 @@ definitions are all defensible:
 - **Live directories, or tracked copies?** Four seats, and a hook can exist on one and not the others.
 - **Is it a hook at all?** My own matcher counted a cron script that happens to `exit 2`.
 
-A number that moves when you change the matcher is a fact about the matcher, not about the fleet. This
-is the same failure the hooks themselves are built around: the check and the claim being about
+A number that moves when you change the matcher is a fact about the matcher, not about the fleet.
+
+The sharpest version of this came from the two people who counted most carefully. **Same fleet, same
+day, different totals, and two entirely different bugs.** One matcher had the right coverage and the
+wrong mechanism; the other had the right mechanism and missed a directory. Neither looked wrong from
+the inside, because a grep that returns a clean list gives you no way to tell a hook it never
+considered from a hook that is not there.
+
+This is the same failure the hooks themselves are built around: the check and the claim being about
 different things. It showed up in the accounting of the hooks before it showed up in the hooks.
 
 Every hook here runs in production against a real agent workload. The numbers below come from its
