@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# guard-sequenced-precondition.py — PreToolUse guard (Bash).
+# guard-sequenced-precondition.py: PreToolUse guard (Bash).
 #
 # Blocks the two shell shapes that silently defeat a caller-side precondition check.
 #
@@ -17,7 +17,7 @@
 #
 # This is not hypothetical. In the incident that produced this hook, a distributed-lock
 # acquire was REFUSED because another worker held the lock, and the file sync on the same
-# line ran anyway — writing to a host that was already being written to.
+# line ran anyway: writing to a host that was already being written to.
 #
 # Piping the check is the same failure by another route: in `check ... | tail -2`, `$?`
 # becomes tail's status, so a refusal reads as success.
@@ -51,7 +51,7 @@ PRECONDITION = re.compile(
 def split_top_level(cmd: str):
     """Yield (index, operator) for shell operators outside quotes.
 
-    Not a full parser — it tracks single/double quotes and backslash escapes, which is
+    Not a full parser: it tracks single/double quotes and backslash escapes, which is
     enough to keep operators inside quoted strings from being mistaken for real ones.
     """
     i, n = 0, len(cmd)
@@ -91,7 +91,7 @@ def strip_heredocs(cmd: str) -> str:
     """Blank out heredoc BODIES so text merely being written isn't read as a command.
 
     Writing documentation about the unsafe form (a runbook, a policy file, this file's own
-    comments) must not trip the guard — a guard that blocks doc edits gets switched off.
+    comments) must not trip the guard: a guard that blocks doc edits gets switched off.
 
     Exception: if the line opening the heredoc invokes a shell or ssh, the body really is
     executed, so it is left in place and scanned.
@@ -105,7 +105,7 @@ def strip_heredocs(cmd: str) -> str:
             continue
         opener = cmd[line_start:line_end]
         if INTERPRETER.search(opener):
-            continue                                  # body is executed — keep scanning it
+            continue                                  # body is executed: keep scanning it
         end = re.search(r'(?m)^\s*%s\s*$' % re.escape(delim), cmd[line_end:])
         stop = line_end + (end.start() if end else len(cmd) - line_end)
         for i in range(line_end, stop):
@@ -125,18 +125,18 @@ def verdict(raw: str):
                 term = (idx, op)
                 break
         if term is None:
-            continue                                  # acquire is the last thing — fine
+            continue                                  # acquire is the last thing: fine
         idx, op = term
         if op in ('&&', '||'):
             continue                                  # correctly gated
         if op == '|':
-            return ("piped into another command, which destroys its exit status — a refusal "
+            return ("piped into another command, which destroys its exit status: a refusal "
                     "then reads as success")
         # ';' or newline: only a problem if real work follows
         rest = cmd[idx + 1:]
         rest = re.sub(r'(?m)^\s*#.*$', '', rest).strip()
         if rest:
-            return ("followed by `;` (or a newline) and more commands — the work runs even "
+            return ("followed by `;` (or a newline) and more commands: the work runs even "
                     "when the lease is REFUSED")
     return None
 
@@ -153,7 +153,7 @@ def main():
     reason = verdict(cmd)
     if reason:
         sys.stderr.write(
-            "guard-lease: blocked — `lease.sh acquire` is {}.\n\n"
+            "guard-lease: blocked: `lease.sh acquire` is {}.\n\n"
             "A lease you did not verify is not a lease. Use the form that has no gap:\n\n"
             "    <precondition-tool> with <args...> -- <command...>\n\n"
             "It acquires, runs the command, and releases on every exit path; if the acquire "

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# guard-find.sh — Claude Code PreToolUse guard (Bash).
+# guard-find.sh: Claude Code PreToolUse guard (Bash).
 #
 # Blocks any `find` invocation that carries a DESTRUCTIVE action primary:
 #   -delete, -exec, -execdir, -ok, -okdir, -fprint, -fprintf, -fls

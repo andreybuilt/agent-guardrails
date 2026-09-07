@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
-"""bash-approver — Claude Code PreToolUse (Bash) auto-approver. HARDENED (v2).
+"""bash-approver: Claude Code PreToolUse (Bash) auto-approver. HARDENED (v2).
 
 WHY: cut permission-prompt friction ("auto mode cannot determine safety") without
 blanket-allowing. Read-only / side-effect-free commands auto-ALLOW; genuinely
 catastrophic ones DENY; everything else falls through to the normal prompt (ASK).
 An optional local model can promote gray commands to allow (fail-closed, off by default).
 
-SECURITY MODEL — a wrong ALLOW is the only unacceptable outcome (a wrong ASK is mere
+SECURITY MODEL: a wrong ALLOW is the only unacceptable outcome (a wrong ASK is mere
 friction). Every ambiguity collapses toward ASK. Hardening over v1 (2026-07-18):
   * Quote-aware top-level SEGMENTER splits on \\n ; && || | & (v1 used shlex, which ate
     newlines as whitespace → `safe\\ndangerous` collapsed to base=safe → ALLOW. FIXED.)
@@ -387,7 +387,7 @@ def _classify_segment(argv):
 # It does NOT deny. It downgrades ALLOW -> ASK so a human sees the read first.
 # Deliberately a SUBSTRING match rather than realpath(): realpath touches the
 # filesystem and would let a symlink decide the verdict. Known NOT to catch symlink
-# aliasing (`cat ~/mykey`) or environment disclosure (`echo $SOME_KEY`) — both are
+# aliasing (`cat ~/mykey`) or environment disclosure (`echo $SOME_KEY`): both are
 # recorded on SR-147 rather than papered over.
 _SECRET_PATH_MARKERS = (
     ".ssh/id_", ".ssh/identity", "authorized_keys", "known_hosts",
@@ -432,7 +432,7 @@ def decide(command: str):
     if segs is None:
         return DECISION_ASK, reason
 
-    # 1) catastrophe (deny) — per segment, pre- AND post-prefix-strip
+    # 1) catastrophe (deny): per segment, pre- AND post-prefix-strip
     for seg in segs:
         argv = _tokenize(seg)
         if argv is None:
@@ -474,7 +474,7 @@ def decide(command: str):
 # Default-deny allow-list. The model may ONLY promote ask→allow within this envelope,
 # so a model false-SAFE (e.g. it once judged `curl …` safe) can never leak a network /
 # package / service / file-mutating command through. The model's value is reading the
-# CONTENT of inline interpreter/expression commands; that — and only that — is promotable.
+# CONTENT of inline interpreter/expression commands; that: and only that: is promotable.
 _PROMOTABLE_BASES = {"python", "python3", "python2", "perl", "ruby", "node", "deno",
                      "php", "lua", "awk", "gawk", "mawk", "nawk", "jq", "yq", "sed",
                      "tr", "expr", "bc", "dc"}
@@ -507,7 +507,7 @@ def _inline_invocation(base: str, args) -> bool:
     benign = _INTERP_BENIGN_FLAGS.get(base, set())
     for a in args:
         if any(a == f or (len(f) == 2 and a.startswith(f) and len(a) > 2) for f in inline):
-            return True                       # -c'code' / -e code — rest is payload+argv
+            return True                       # -c'code' / -e code: rest is payload+argv
         if a in benign:
             continue                          # env/warning flag, carries no code
         return False                          # a file, '-', '--', or an unknown flag
@@ -600,7 +600,7 @@ def _model_promote(command: str) -> bool:
                                      headers={"Content-Type": "application/json"})
         with urllib.request.urlopen(req, timeout=8) as r:
             out = json.loads(r.read().decode()).get("response", "")
-        # SR-298: a PREFIX match promotes any reply beginning "SAFE" — including
+        # SR-298: a PREFIX match promotes any reply beginning "SAFE": including
         # "SAFETY: UNSAFE", "SAFE? UNSAFE" and "SAFE_NO", where the model answered
         # CORRECTLY and the comparison discarded its answer. Measured: 20 live
         # false-SAFE -> 2. A more capable model makes the prefix bug WORSE, because
@@ -736,14 +736,14 @@ SELFTEST = [
 
 
 ENVELOPE_SELFTEST = [
-    # SR-202 known-bads — MUST be excluded from promotion
+    # SR-202 known-bads: MUST be excluded from promotion
     ("python3 -E evil.py", False),
     ("python3 -I evil.py", False),
     ("python3 -S evil.py", False),
     ("python3 evil.py -c", False),
     ("python3 script.py", False),
     ("deno run x.ts", False),
-    # legitimate inline forms — must stay promotable
+    # legitimate inline forms: must stay promotable
     ("python3 -c 'print(1)'", True),
     ("python3 -E -c 'print(1)'", True),
     ("perl -E 'say 1'", True),

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""guard-git.py — PreToolUse hook. Block the four git operations that can destroy work
+"""guard-git.py: PreToolUse hook. Block the four git operations that can destroy work
 that exists in only one place, and ONLY when work would actually be lost.
 
 WHY THIS AND NOT A DENY RULE
@@ -22,7 +22,7 @@ An earlier sibling of this hook blocked a COMMIT MESSAGE that quoted the anti-pa
 about it. So this strips quoted strings before matching: `git commit -m "removed the worktree"`
 is a commit, not a removal, and must pass.
 
-FAILURE POLICY IS DELIBERATELY LOPSIDED. If the safety check cannot run, this BLOCKS — but only
+FAILURE POLICY IS DELIBERATELY LOPSIDED. If the safety check cannot run, this BLOCKS: but only
 for the five operations above. Every other git command is allowed without inspection, so a
 broken check can never take git away wholesale. Losing commits is worse than one extra prompt.
 

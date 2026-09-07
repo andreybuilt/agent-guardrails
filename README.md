@@ -3,11 +3,18 @@
 Six PreToolUse hooks that refuse unsafe actions **at the call site**, before a coding agent
 executes them. Each one returns exit 2 and stops the call.
 
-**These six are a subset.** Ten enforcement hooks run on the fleet this came from. The four not
-here are not held back for effect: `guard-dead-tree.py` and `guard-host-lease.py` encode my own
-host topology and lease targets, `guard-field-selector.py` is bound to one internal API's schema,
-and `one-step-guard.py` is disarmed, which the last section explains. Published or not, each one
-either generalizes or it does not, and four of ten do not.
+**Five of these six run on the fleet this came from; nine enforcement hooks run there in total.**
+The four not published encode things nobody else has: `guard-dead-tree.py` and `guard-host-lease.py`
+are bound to my own paths and hosts, `guard-field-selector.py` to one internal API's schema, and
+`one-step-guard.py` is the subject of the last section. The sixth, `guard-sequenced-precondition.py`,
+exists only here: it is the generalized form of a hook that guarded one specific distributed lock,
+rewritten around a configurable pattern so the idea survives without my topology. Its error text
+still says `guard-lease`, which is where it came from.
+
+⚠️ I first wrote *ten* in this paragraph and it was wrong. `guard-host-lease.py` is registered as a
+PreToolUse hook, so it looked like enforcement in a list of what is wired. Its own docstring says it
+never blocks and always exits 0, and it has no exit-2 path at all. Registered is not enforcing, which
+is the same mistake, one hook further down, that made me distrust a larger number in the first place.
 
 Every hook here runs in production against a real agent workload. The numbers below come from its
 own logs, not from a benchmark built to make the point.

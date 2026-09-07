@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
-"""orphan-tooling-guard — Stop hook. Catches executables written to /tmp and left there.
+"""orphan-tooling-guard: Stop hook. Catches executables written to /tmp and left there.
 
 Measured 2026-08-22: **74** .sh/.py files in /tmp, **9** with a copy anywhere under the work tree,
 **65 existing nowhere else**, oldest 2026-08-17. They span threads (client-land.sh, cert-watch.sh,
 c2pa_probe.py), so this is systemic rather than one thread's habit. /tmp does not survive a reboot.
 
-`project-wrap` Pass 0 already rescues these — but only at wrap, and only if a wrap runs at all.
+`project-wrap` Pass 0 already rescues these: but only at wrap, and only if a wrap runs at all.
 This moves the catch to the end of the turn that CREATED the file, while it can still be acted on.
 
 Why the decision cannot be made at write time: you usually cannot tell tooling from throwaway when
@@ -17,10 +17,10 @@ whose CONTENT HASH appears nowhere under the work tree. Hash not name, so a resc
 file still counts as rescued.
 
 WHAT IT DELIBERATELY DOES NOT FLAG:
-  - data files (.json/.txt/.csv/.log/.tar) — manifests and staging are legitimately ephemeral
-  - scripts that already have a copy under the work tree — already durable
-  - scripts not touched this turn — someone else's problem, and nagging about them is noise
-  - anything when stop_hook_active is set — never block twice
+  - data files (.json/.txt/.csv/.log/.tar): manifests and staging are legitimately ephemeral
+  - scripts that already have a copy under the work tree: already durable
+  - scripts not touched this turn: someone else's problem, and nagging about them is noise
+  - anything when stop_hook_active is set: never block twice
 
 Exit 0 + JSON {"decision":"block"} sends it back; plain exit 0 allows.
 Log: ~/.claude/hooks/orphan-tooling-guard.log
@@ -38,10 +38,10 @@ TREE = os.environ.get("AGENT_GUARDRAILS_TREE") or next(
     (os.path.join(HOME, n) for n in ("Tree", "work", "src", "Projects")
      if os.path.isdir(os.path.join(HOME, n))), os.path.join(HOME, "Tree"))
 LOG = os.path.join(HOME, ".claude", "hooks", "orphan-tooling-guard.log")
-# Files already reported once. Without this the guard nags every turn about the same script —
+# Files already reported once. Without this the guard nags every turn about the same script -
 
 def _stranded_count():
-    """Measured, never asserted. A guard that states a stale number teaches lanes to distrust it —
+    """Measured, never asserted. A guard that states a stale number teaches lanes to distrust it -
     the exact defect this guard exists to prevent. Counts THIS seat, now."""
     n = 0
     for d in WATCH_DIRS:
@@ -62,12 +62,12 @@ WATCH_DIRS = ["/tmp"]          # /private/tmp is the same filesystem; realpath d
 # problem and nagging about them is pure noise, so skip any scratchpad that is not this session's.
 #
 # ⚠️ FIXED 2026-08-22. This read os.environ["CLAUDE_SESSION_ID"], which is NOT set in a hook's
-# environment, so MY_SESSION was always "" — and the skip condition was written
+# environment, so MY_SESSION was always "": and the skip condition was written
 # `if "/claude-" in dirpath and MY_SESSION and ...`, where the empty string short-circuits and
 # disables the skip entirely. The guard spent a night reporting five other sessions' files
 # (fix_t36.py, node_owner_fix.py, publish_v92.py, diag_inline.py, publish_v92b.py) to a thread that
 # had written none of them. The truthiness test meant to make the check safe is what turned it off
-# — same shape as feedback_guard_disarmed_by_its_argument.
+#: same shape as feedback_guard_disarmed_by_its_argument.
 #
 # The session id arrives in the hook PAYLOAD on stdin. It is resolved in main() and passed down,
 # and scoping now fails CLOSED: unknown session => skip every scratchpad rather than report all.
@@ -106,7 +106,7 @@ def recent_code_files(session_id):
                 continue
             # NOTE: do NOT prune here on session id. The scratchpad lives several levels below
             # /tmp/claude-<uid>/, so a prune at this level matches "/claude-" on the TOP directory
-            # — where the session id cannot appear yet — and cuts off our OWN scratchpad too.
+            #: where the session id cannot appear yet: and cuts off our OWN scratchpad too.
             # Caught by the dry run on 2026-08-22: the first version of this fix stopped reporting
             # the reporting session's own files, i.e. it silently disabled half the guard while
             # looking correct. Session filtering happens per FILE, below.
@@ -132,14 +132,14 @@ def recent_code_files(session_id):
 #
 # ⚠️ ADDED 2026-09-04 after FOUR misfires in two days, all against one thread, none of the files
 # written by it: wrap_resume.py + port_to_tree.sh (09-03, two consecutive turns) and fj2.sh,
-# probe1.sh, probe_inspect.sh, probe3.sh (09-04, one lane's git-server probes — three of them
+# probe1.sh, probe_inspect.sh, probe3.sh (09-04, one lane's git-server probes: three of them
 # written BEFORE the blocked session even started).
 #
 # The scratchpad half of this guard was scoped to the session on 2026-08-22. Bare /tmp never was:
 # it blocks on mtime alone, so on a seat running many lanes it blocks whoever happens to stop next.
 #
 # THE ASYMMETRY, and it is lopsided on purpose. A false BLOCK costs a turn and teaches the reader
-# to dismiss the guard — measured, four times. A false MISS costs nothing new: the file is still in
+# to dismiss the guard: measured, four times. A false MISS costs nothing new: the file is still in
 # /tmp and its real owner still gets blocked the next time they touch it. So when attribution is
 # impossible, DO NOT BLOCK. Session scratchpads keep their existing fail-closed scoping.
 _TRANSCRIPT = None
@@ -193,7 +193,7 @@ def tree_hashes():
     """Content hashes of every .sh/.py under the work tree.
 
     Hash, NOT basename. The dry run on 2026-08-22 caught this: to_delivery.sh had been rescued
-    as veo_to_delivery.sh, and a name-only check called the rescued file an orphan — the guard
+    as veo_to_delivery.sh, and a name-only check called the rescued file an orphan: the guard
     would have false-fired on the exact file that motivated it. Content survives a rename.
     """
     global _TREE_HASHES
@@ -284,7 +284,7 @@ def main():
         f"{os.path.basename(TREE)}:\n" + lines + "\n\n"
         f"/tmp does not survive a reboot, and {_stranded_count()} .sh/.py files are already "
         f"sitting there on this seat. If any of "
-        "these is real tooling, copy it into the owning project's 10_SOURCE/<pipeline>/ now — "
+        "these is real tooling, copy it into the owning project's 10_SOURCE/<pipeline>/ now: "
         "not at wrap, which only runs if a wrap happens.\n"
         "If it is genuinely throwaway, say so in one line and continue; this will not fire again "
         "for the same file once it stops being touched."

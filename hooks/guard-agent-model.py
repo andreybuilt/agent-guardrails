@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""guard-agent-model.py — PreToolUse(Agent). REFUSES an Agent call that does not name its model.
+"""guard-agent-model.py: PreToolUse(Agent). REFUSES an Agent call that does not name its model.
 
 WHY: an Agent call with no `model` inherits the parent's model. Measured on one seat over eight hours:
-350 Agent calls, 168 inherited, 126 of those ran Opus, ZERO ever pinned to Opus — every Opus
+350 Agent calls, 168 inherited, 126 of those ran Opus, ZERO ever pinned to Opus: every Opus
 subagent came from an omitted parameter, never a decision. A charter rule cannot reach a session
 that is not reading the charter; a refusal can.
 
@@ -35,7 +35,7 @@ def main():
         sys.exit(0)
     inp = ev.get("tool_input") or {}
     # 🛑 FORKS ARE EXEMPT. The Agent tool's own schema says `model` is IGNORED for
-    # subagent_type "fork" — a fork always inherits the parent model by design. Refusing there
+    # subagent_type "fork": a fork always inherits the parent model by design. Refusing there
     # would be a false positive, and a guard that fires on correct behaviour trains people past it.
     if (inp.get("subagent_type") or "").lower() == "fork":
         log("ALLOW subagent_type=fork (model is ignored for forks)")
@@ -52,12 +52,12 @@ def main():
 
     log(f"BLOCK model=<missing> agent={agent} sid={ev.get('session_id','?')} desc={desc!r}")
     sys.stderr.write(
-        "guard-agent-model: BLOCKED — this Agent call names no `model`, so the subagent would\n"
+        "guard-agent-model: BLOCKED: this Agent call names no `model`, so the subagent would\n"
         "silently inherit this session's model (usually Opus). A default is not a decision.\n\n"
         "Re-issue the same call with `model` set. Size it to the work:\n"
-        "  \"model\": \"haiku\"   mechanical fan-out — grep-and-report, counting, messaging N targets\n"
-        "  \"model\": \"sonnet\"  bounded real work — verification, sweeps, running a clear plan\n"
-        "  \"model\": \"opus\"    judgment or irreversible work — and then say why in `description`\n\n"
+        "  \"model\": \"haiku\"   mechanical fan-out: grep-and-report, counting, messaging N targets\n"
+        "  \"model\": \"sonnet\"  bounded real work: verification, sweeps, running a clear plan\n"
+        "  \"model\": \"opus\"    judgment or irreversible work: and then say why in `description`\n\n"
         "Nothing else about the call needs to change. (Measured 2026-09-03: 126 Opus subagents on\n"
         "one seat in a day, all from an omitted parameter. This hook is why that number stops growing.)\n")
     sys.exit(2)
