@@ -3,6 +3,12 @@
 Six PreToolUse hooks that refuse unsafe actions **at the call site**, before a coding agent
 executes them. Each one returns exit 2 and stops the call.
 
+**These six are a subset.** Ten enforcement hooks run on the fleet this came from. The four not
+here are not held back for effect: `guard-dead-tree.py` and `guard-host-lease.py` encode my own
+host topology and lease targets, `guard-field-selector.py` is bound to one internal API's schema,
+and `one-step-guard.py` is disarmed, which the last section explains. Published or not, each one
+either generalizes or it does not, and four of ten do not.
+
 Every hook here runs in production against a real agent workload. The numbers below come from its
 own logs, not from a benchmark built to make the point.
 
