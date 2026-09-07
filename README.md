@@ -1,7 +1,8 @@
 # agent-guardrails
 
-Six PreToolUse hooks that refuse unsafe actions **at the call site**, before a coding agent
-executes them. Each one returns exit 2 and stops the call.
+Six hooks that refuse unsafe agent actions instead of warning about them afterwards. Five run as
+`PreToolUse` and stop the command **before it executes**; one runs as `Stop` and sends the turn back.
+They refuse in three different ways, which turns out to matter more than it sounds like it should.
 
 **These six are the ones that generalize.** Others run on the fleet this came from and stay there:
 two are bound to my own paths and hosts, one to a single internal API's schema, and `one-step-guard.py`
@@ -17,9 +18,20 @@ definitions are all defensible:
 
 - **Registered, or enforcing?** One hook is wired as `PreToolUse` and its own docstring says it never
   blocks and always exits 0. It belongs in a list of what is wired and not in a list of what refuses.
-- **`exit 2`, or a JSON decision?** `PreToolUse` hooks refuse with exit code 2. `Stop` hooks refuse
-  with exit 0 and `{"decision":"block"}`. A matcher written for the first silently drops every hook
-  of the second kind, and two of mine are that kind.
+- 🛑 **How does a hook refuse?** There are **three** mechanisms, and the six hooks here happen to use
+  all three, so this claim is checkable in this repository rather than against a fleet you cannot see:
+
+  | Mechanism | Used by |
+  |---|---|
+  | `exit 2` | `guard-agent-model.py`, `guard-find.sh`, `guard-git.py`, `guard-sequenced-precondition.py` |
+  | exit 0 + `{"decision":"block"}` | `orphan-tooling-guard.py` |
+  | exit 0 + `hookSpecificOutput.permissionDecision: "deny"` | `bash-approver.py` |
+
+  `bash-approver.py` contains **zero** `exit 2` and **zero** `decision: block`. It is the busiest
+  guard in the set, and a matcher built for the other two mechanisms drops it in silence. Mine did.
+  A later matcher caught all three, but only because it also matched the bare words `deny` and
+  `blocked`: that is luck, not method. A looser matcher is an untested one that happened to win, and
+  it fails the same silent way against a hook that refuses in some fourth manner.
 - **Live directories, or tracked copies?** Four seats, and a hook can exist on one and not the others.
 - **Is it a hook at all?** My own matcher counted a cron script that happens to `exit 2`.
 
