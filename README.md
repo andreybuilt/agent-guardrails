@@ -3,18 +3,29 @@
 Six PreToolUse hooks that refuse unsafe actions **at the call site**, before a coding agent
 executes them. Each one returns exit 2 and stops the call.
 
-**Five of these six run on the fleet this came from; nine enforcement hooks run there in total.**
-The four not published encode things nobody else has: `guard-dead-tree.py` and `guard-host-lease.py`
-are bound to my own paths and hosts, `guard-field-selector.py` to one internal API's schema, and
-`one-step-guard.py` is the subject of the last section. The sixth, `guard-sequenced-precondition.py`,
-exists only here: it is the generalized form of a hook that guarded one specific distributed lock,
-rewritten around a configurable pattern so the idea survives without my topology. Its error text
-still says `guard-lease`, which is where it came from.
+**These six are the ones that generalize.** Others run on the fleet this came from and stay there:
+two are bound to my own paths and hosts, one to a single internal API's schema, and `one-step-guard.py`
+is the subject of the last section. A sixth published here, `guard-sequenced-precondition.py`, runs on
+no machine at all: it is the generalized form of a hook that guarded one specific distributed lock,
+rewritten around a configurable pattern. Its error text still says `guard-lease`, which is where it
+came from.
 
-⚠️ I first wrote *ten* in this paragraph and it was wrong. `guard-host-lease.py` is registered as a
-PreToolUse hook, so it looked like enforcement in a list of what is wired. Its own docstring says it
-never blocks and always exits 0, and it has no exit-2 path at all. Registered is not enforcing, which
-is the same mistake, one hook further down, that made me distrust a larger number in the first place.
+🛑 **I am not publishing a total, and the reason is the most useful thing in this section.** Four
+counts were made of that fleet in one day and produced four answers: twelve, ten, nine, eight. Nobody
+lied and nobody miscounted. Each used a different definition of "enforcement hook", and the
+definitions are all defensible:
+
+- **Registered, or enforcing?** One hook is wired as `PreToolUse` and its own docstring says it never
+  blocks and always exits 0. It belongs in a list of what is wired and not in a list of what refuses.
+- **`exit 2`, or a JSON decision?** `PreToolUse` hooks refuse with exit code 2. `Stop` hooks refuse
+  with exit 0 and `{"decision":"block"}`. A matcher written for the first silently drops every hook
+  of the second kind, and two of mine are that kind.
+- **Live directories, or tracked copies?** Four seats, and a hook can exist on one and not the others.
+- **Is it a hook at all?** My own matcher counted a cron script that happens to `exit 2`.
+
+A number that moves when you change the matcher is a fact about the matcher, not about the fleet. This
+is the same failure the hooks themselves are built around: the check and the claim being about
+different things. It showed up in the accounting of the hooks before it showed up in the hooks.
 
 Every hook here runs in production against a real agent workload. The numbers below come from its
 own logs, not from a benchmark built to make the point.
