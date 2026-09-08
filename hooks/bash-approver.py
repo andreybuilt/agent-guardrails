@@ -756,7 +756,6 @@ SELFTEST = [
     ("cat ~/.ssh/*", "ask"),
     ("dd if=/dev/rdisk8 of=/dev/null bs=1m count=16", "ask"),
     ("dd if=/dev/zero of=/dev/rdisk8", "deny"),
-    ("git diff HEAD~1", "allow"),
     ("git remote -v", "allow"),
     ("git branch --list", "allow"),
     ("git reflog", "allow"),

@@ -180,7 +180,7 @@ temporary repositories and drives the hook through both halves of every rule: si
 must refuse, and seven wrongly-satisfied twins it must allow. Three of those seven are false
 positives the hook shipped with and had fixed within a day.
 
-`bash-approver.py --selftest` runs an **109-case adversarial battery** and exits non-zero on any
+`bash-approver.py --selftest` runs an **108-case adversarial battery** and exits non-zero on any
 wrong-allow. Each case entered the battery after a bypass got through, so they are regression
 tests rather than illustrations. The battery covers newline-separated segments, `&&`/`||`/`;`/`|`
 sequencing, redirect targets, `env`/`sudo`/`nice` wrapper prefixes, `$()` and heredocs, and quoted
@@ -220,7 +220,7 @@ the long form starts with `--`, not `-o`), `git remote set-url`, `git branch -D`
 expire`, `env -0`, and `shutdown -h`, which read as a request for help because `-h` is in the
 help-flag set.
 
-All nine are closed and all nine are now battery cases, which is why the count is 109 rather than
+All nine are closed and all nine are now battery cases, which is why the count is 108 rather than
 85. The lesson is the one this whole file keeps circling: a safe-list answers a question about the
 subcommand, and the danger was in an option nobody asked it about.
 
