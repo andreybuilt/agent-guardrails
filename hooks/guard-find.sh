@@ -36,13 +36,21 @@ cmd=$(jq -r '.tool_input.command // empty' 2>/dev/null)
 norm=$(printf '%s' "$cmd" | python3 -c '
 import re,sys
 s=sys.stdin.read()
+# A backslash-newline is a line continuation: the shell rejoins it into ONE command. grep does
+# not, so a destructive flag parked on the next physical line was never in the same line as the
+# invocation and was never examined. Join them first. Found 2026-09-07.
+s = re.sub(r"\\\n\s*", " ", s)
 def q(m):
-    inner=m.group(2)
+    inner = m.group(2)
     return " " if re.search(r"\s", inner) else inner
 sys.stdout.write(re.sub(r"([\x27\"])(.*?)\1", q, s, flags=re.S))')
 
-# Command position: start of string, or after a separator, optionally behind sudo/env/nice.
-INVOKE=$(printf '%s' "$norm" | grep -Eo '(^|[;&|(]|&&|\|\|)[[:space:]]*(sudo[[:space:]]+|env[[:space:]]+|nice[[:space:]]+)*g?find([[:space:]]|$).*' | head -1)
+# Command position, and the list of things that can stand in front of it is the whole game.
+# It was sudo|env|nice until 2026-09-07, when an adversarial pass walked straight past it with
+# `command`, `exec`, `time`, `busybox` and a backslash-escaped name. Each of those runs the same
+# binary; none of them looked like an invocation to the guard.
+PREFIX='(sudo|env|nice|command|exec|eval|time|builtin|timeout|nohup|stdbuf|xargs|busybox|doas)[[:space:]]+'
+INVOKE=$(printf '%s' "$norm" | grep -Eo "(^|[;&|(]|&&|\|\|)[[:space:]]*($PREFIX)*\\\\?g?find([[:space:]]|$).*" | head -1)
 [ -z "$INVOKE" ] && exit 0
 
 if printf '%s' "$INVOKE" | grep -Eq '(^|[[:space:]])(-delete|-execdir|-exec|-okdir|-ok|-fprintf|-fprint|-fls)([[:space:]]|$)'; then

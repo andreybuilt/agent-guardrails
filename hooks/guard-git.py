@@ -75,9 +75,19 @@ def main():
         cwd = os.path.expanduser(m.group(1))
 
     # ---- git push --force : always a human call -------------------------------------------
-    if re.search(r"git\s+push\b", cmd) and re.search(r"(--force(-with-lease)?\b|\s-f\b)", cmd):
-        block("`git push --force` rewrites history others may already hold.\n"
-              "Run it yourself if you mean it. Nothing was pushed.")
+    # Adversarially re-tested 2026-09-07. Two holes, both found in one pass:
+    #   `git -C <dir> push --force`  -- every OTHER rule below carries the (?:-C \S+ )? clause and
+    #                                   this one did not, so the guard could be stepped around by
+    #                                   naming the repository instead of standing in it.
+    #   `git push origin +main`      -- the leading-plus refspec is a force push with no --force on
+    #                                   the line at all, which is the form that does not look like one.
+    if re.search(r"git\s+(?:-C\s+\S+\s+)?push\b", cmd):
+        forced = re.search(r"(--force(-with-lease)?\b|\s-f\b)", cmd)
+        plus   = re.search(r"push\b[^;&|]*\s\+[^\s]", cmd)     # `push origin +main`, `push origin +HEAD:main`
+        if forced or plus:
+            block("`git push` with %s rewrites history others may already hold.\n"
+                  "Run it yourself if you mean it. Nothing was pushed."
+                  % ("--force" if forced else "a leading-plus refspec, which forces without saying so"))
 
     # ---- git worktree remove : the 2026-08-19 shape ---------------------------------------
     # ⚠️ CORRECTED 2026-08-24, first day in service, after it blocked a safe cleanup.
@@ -89,10 +99,17 @@ def main():
     #
     # What can actually be lost here is UNCOMMITTED work, and plain `worktree remove` already
     # refuses a dirty worktree on its own. So the only case worth blocking is --force + dirty.
-    m = re.search(r"git\s+(?:-C\s+\S+\s+)?worktree\s+remove\s+((?:--force|-f)\s+)?(\S+)", cmd)
+    # --force is a flag, so it can sit on EITHER side of the path. The first draft only looked in
+    # front of it, so `worktree remove <path> --force` read as unforced and skipped the dirty check
+    # entirely. Found 2026-09-07.
+    m = re.search(r"git\s+(?:-C\s+\S+\s+)?worktree\s+remove\s+(.+)", cmd)
     if m:
-        forced = bool(m.group(1))
-        wt = os.path.expanduser(m.group(2))
+        rest = m.group(1).split()
+        forced = any(a in ("--force", "-f") for a in rest)
+        paths = [a for a in rest if not a.startswith("-")]
+        if not paths:
+            sys.exit(0)
+        wt = os.path.expanduser(paths[0])
         if not os.path.isabs(wt):
             wt = os.path.join(cwd, wt)
         if not os.path.isdir(wt):
@@ -112,20 +129,28 @@ def main():
         sys.exit(0)
 
     # ---- git branch -D : same stranding risk ----------------------------------------------
-    m = re.search(r"git\s+(?:-C\s+\S+\s+)?branch\s+(?:-D|--delete\s+--force)\s+(\S+)", cmd)
+    # `git branch -D a b c` deletes all three. The first draft captured only the first name, so a
+    # merged branch in front of an unmerged one bought the whole line a pass. Found 2026-09-07.
+    m = re.search(r"git\s+(?:-C\s+\S+\s+)?branch\s+(?:-D|--delete\s+--force)\s+(.+)", cmd)
     if m:
-        br = m.group(1)
-        rc, ahead = sh(["git", "log", "--oneline", "main..%s" % br], cwd=cwd)
-        if rc != 0:
-            block("cannot compare %s against main -- refusing while blind." % br)
-        n = len([x for x in ahead.splitlines() if x.strip()])
-        if n:
-            block("branch %s holds %d commit(s) not on main. -D discards them.\n"
-                  "Merge or push first, or use -d which refuses unmerged branches itself." % (br, n))
+        names = [b for b in m.group(1).split() if not b.startswith("-")]
+        for br in names:
+            rc, ahead = sh(["git", "log", "--oneline", "main..%s" % br], cwd=cwd)
+            if rc != 0:
+                block("cannot compare %s against main -- refusing while blind." % br)
+            n = len([x for x in ahead.splitlines() if x.strip()])
+            if n:
+                block("branch %s holds %d commit(s) not on main. -D discards them.\n"
+                      "Merge or push first, or use -d which refuses unmerged branches itself." % (br, n))
         sys.exit(0)
 
     # ---- git reset --hard / git clean -f : discard uncommitted work ------------------------
-    hard = re.search(r"git\s+(?:-C\s+\S+\s+)?reset\b.*--hard", cmd)
+    # `git checkout -- <path>` and `git restore <path>` discard uncommitted TRACKED changes exactly
+    # as `reset --hard` does. They were outside the guarded set until 2026-09-07, which meant the
+    # hook blocked one spelling of the loss and waved through two others.
+    hard = (re.search(r"git\s+(?:-C\s+\S+\s+)?reset\b.*--hard", cmd)
+            or re.search(r"git\s+(?:-C\s+\S+\s+)?checkout\s+.*--\s", cmd)
+            or re.search(r"git\s+(?:-C\s+\S+\s+)?restore\b(?!.*--staged)", cmd))
     clean = re.search(r"git\s+(?:-C\s+\S+\s+)?clean\b.*(-\w*f|\s--force)", cmd)
     if hard or clean:
         rc, dirty = sh(["git", "status", "--porcelain"], cwd=cwd)

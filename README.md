@@ -180,17 +180,41 @@ strings that only look dangerous (`echo 'rm -rf /'` has to stay allowed).
 
 ## Known bypasses, stated because they are still open
 
-Re-tested 2026-09-07 against shapes an internal audit had recorded. Some were already fixed, one
-I fixed that day, and these are the ones that still work. A guard set with no published bypass
-list has either not been attacked or is not telling you.
+An adversarial pass on 2026-09-07 attacked these hooks with the published table in hand and
+instructions to find what was **not** in it. It found eleven shapes. All eleven are now closed and
+pinned by `tests/adversarial/`, which fails the build if any of them comes back. What follows is
+what survived that pass, and it is shorter than the list of what did not.
 
-| Hook | Shape that gets through | Why |
+| Hook | Shape that still gets through | Why |
 |---|---|---|
-| `guard-sequenced-precondition.py` | `sh -c '...'`, `bash -c '...'`, `ssh host '...'`, a single `&`, `check \|\| true ; work` | Only the first operator at the top level is examined. A wrapper hides the sequence inside an argument. 7 of 8 audited shapes still work. |
-| `bash-approver.py` | `git log --output=FILE`, `git diff --output=FILE`, `file -C -m FILE` | Read-only-looking subcommands that write through a flag the redirect analysis does not model. `sort -o` was the same class and is fixed. |
-| `bash-approver.py` | `echo $SECRET` | It models side effects, not disclosure. The source says so; it is a design boundary rather than an oversight, and it is the gap I would close next. |
-| `orphan-tooling-guard.py` | `.pl`, `.rb`, extensionless executables | It hashes `.sh` and `.py` only, so tooling in another language is invisible to it. |
-| `guard-agent-model.py` | `model="inherit"`, `model="banana"` | It requires a non-empty model and does not validate the value. `inherit` reaches the outcome the hook exists to discourage while satisfying the letter of it. Arguable as a design choice; listed so you can decide for yourself. |
+| `guard-sequenced-precondition.py` | `sh -c '...'`, `bash -c '...'`, `ssh host '...'`, a single `&` | Only the first operator at the top level is examined; a wrapper hides the sequence inside an argument. |
+| `guard-sequenced-precondition.py` | `"lease.sh" acquire`, `l\ease.sh acquire`, `lease.sh 'acquire'` | The precondition is matched as text, so quoting or escaping the command name defeats the matcher while the shell still runs the real thing. |
+| `bash-approver.py` | `git branch -D`, `git remote set-url`, `git reflog expire` | Its safe-subcommand table treats `branch`, `remote` and `reflog` as read-only. They are not. `git remote set-url origin <url>` is the sharpest of these: it silently redirects your next push. |
+| `bash-approver.py` | `git show --output=FILE`, `git log --output=FILE`, `file -C -m FILE` | Read-only-looking subcommands that write through a flag the redirect analysis does not model. |
+| `bash-approver.py` | `echo $SECRET` | It models side effects, not disclosure. A design boundary, stated in the source. |
+| `orphan-tooling-guard.py` | anything five directories deep, `.pl`, `.rb`, extensionless | The walk stops at depth 5, and it hashes `.sh` and `.py` only. |
+| `guard-agent-model.py` | `model="inherit"` | It requires a non-empty model and does not validate the value. |
+
+### What that pass closed, because the failures are the useful part
+
+`guard-git.py` had published **no** bypass list, and it had four holes plus one I found writing the
+control case for the others:
+
+- **`git -C <dir> push --force` was allowed.** Every other rule in that file carries a `-C` clause
+  and the force rule did not, so the guard could be stepped around by naming the repository instead
+  of standing in it. I found this because a control case I expected to block did not.
+- `git push origin +main` was allowed: a leading-plus refspec forces without the word `force`
+  appearing on the line.
+- `git branch -D merged unmerged` was allowed: only the first branch name was checked.
+- `git worktree remove <path> --force` was allowed: `--force` was only recognized in front of the
+  path, so the flag after it read as unforced and skipped the dirty check.
+- `git checkout -- .` and `git restore <path>` discard tracked changes exactly as `reset --hard`
+  does, and were outside the guarded set entirely.
+
+`guard-find.sh` was walked past by `command`, `exec`, `time`, `busybox` and `\find`, because its
+command-position list was `sudo|env|nice` and nothing else. The best of the six was a
+**backslash-newline continuation**: `find` sits in command position, the destructive flag lands on
+the next physical line, and the matcher is line-oriented while the shell is not.
 
 **Fixed on 2026-09-07, and worth the detail because both halves were wrong at once.**
 `guard-find.sh` allowed `find . -name '*.py' '-delete'`: the flag match required whitespace in front of
