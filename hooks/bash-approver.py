@@ -269,7 +269,14 @@ def _is_catastrophic_argv(argv):
         if recursive and any(t in _PROTECTED or t.rstrip("/") in _PROTECTED for t in targets):
             return f"recursive rm of a protected path ({', '.join(targets)})"
 
-    if base == "dd" and any(a.startswith("of=/dev/") for a in argv):
+    # The rule always checked which SIDE the device was on: only `of=` counts, so reading a raw
+    # device was never the trigger. What it did not do was distinguish a raw device from a sink.
+    # `of=/dev/null` and `of=/dev/stdout` write nowhere, and blocking them is the over-block this
+    # repository documents. Corrected 2026-09-07, after a review pointed out that the README
+    # described this rule as ignoring the side, which it never did.
+    _DD_SINKS = ("of=/dev/null", "of=/dev/stdout", "of=/dev/stderr", "of=/dev/tty", "of=/dev/zero")
+    if base == "dd" and any(a.startswith("of=/dev/") for a in argv) \
+       and not any(a in _DD_SINKS for a in argv):
         return "dd writing to a raw device"
 
     if re.match(r"mkfs(\.|$)", base) or base in ("newfs", "diskutil"):
@@ -329,6 +336,61 @@ def _writes_despite_always_safe(base, args) -> bool:
     return False
 
 
+
+# ── SR-321: shapes that reach an ALLOW through a safe-list, found by adversarial review ──────
+# Every one of these was reported ALLOW on 2026-09-07 by a pass that was handed the published
+# bypass table and told to find what was not in it. Three of them execute arbitrary code.
+#
+# The common cause is that a safe-list answers "is this subcommand read-only" while the danger
+# lives in an OPTION the list never looks at. `git diff` is read-only. `git -c
+# diff.external=X diff` runs X. The subcommand parser was skipping `-c` and its value precisely
+# so it could find the subcommand, which is what made the option invisible.
+#
+# This gate runs BEFORE the safe-lists so no path can reach them without passing here first.
+_GIT_CONFIG_INJECT = ("-c", "--config-env")
+
+def _unsafe_shape(base, args):
+    """Return a reason string when a nominally-safe invocation is not, else None."""
+    # 1. git -c <key>=<value> sets config for one command. Several keys name a program that
+    #    git then executes: diff.external, core.fsmonitor, core.pager, *.textconv, and more.
+    #    There is no safe subset worth enumerating, so any command-line config goes to ASK.
+    if base == "git" and any(a in _GIT_CONFIG_INJECT or a.startswith("--config-env=")
+                             for a in args):
+        return "git -c/--config-env sets config for this command, and several keys name a program git will execute"
+
+    # 2. git subcommands that read AND write. They were on the safe list whole.
+    if base == "git":
+        sub = _git_subcommand(args)
+        rest = [a for a in args if a != sub]
+        if sub == "remote" and any(a in ("add", "remove", "rm", "set-url", "rename", "prune",
+                                         "set-head", "set-branches") for a in rest):
+            return "git remote %s mutates repository config" % next(
+                a for a in rest if a in ("add", "remove", "rm", "set-url", "rename", "prune",
+                                         "set-head", "set-branches"))
+        if sub == "branch" and any(a.startswith("-") and any(f in a for f in ("D", "d", "m", "M", "f"))
+                                   and a != "--list" for a in rest):
+            return "git branch with a delete/move/force flag rewrites refs"
+        if sub == "reflog" and any(a in ("expire", "delete") for a in rest):
+            return "git reflog expire/delete destroys the recovery log"
+
+    # 3. sort's long-form output flag. The short form was already caught; `--output=` does not
+    #    start with "-o", which is what the original check tested.
+    if base == "sort" and any(a == "--output" or a.startswith("--output=") for a in args):
+        return "sort --output writes a file"
+
+    # 4. env/printenv dumping the whole environment. `-0` was swallowed by the numeric-argument
+    #    skip, and a full environment dump is a disclosure whatever its separator.
+    if base in ("env", "printenv") and not [a for a in args if not a.startswith("-")]:
+        return "%s with no command dumps the environment" % base
+
+    # 5. Halting the machine. `-h` is in the help/version set, so `shutdown -h` read as a
+    #    request for help. On systemd it schedules a halt.
+    if base in ("shutdown", "reboot", "halt", "poweroff"):
+        return "%s stops the machine" % base
+
+    return None
+
+
 def _classify_segment(argv):
     """Return 'allow' | 'ask' | ('deny', reason) for one segment's resolved argv."""
     if not argv:
@@ -336,12 +398,22 @@ def _classify_segment(argv):
 
     real, had_sudo = _strip_prefixes(argv)
     if not real:
+        # `env` and `printenv` with no command print the whole environment, which is a
+        # disclosure whatever the separator. They were reaching this branch as a "bare
+        # wrapper" and being allowed: the stripper removes `env` in order to find the real
+        # command, so by the time anything looked, there was nothing left to look at.
+        if argv and os.path.basename(argv[0].lstrip("\\")) in ("env", "printenv"):
+            return DECISION_ASK
         return DECISION_ALLOW                     # pure env-assignments / bare wrapper
     if had_sudo:
         return DECISION_ASK                       # sudo (non-catastrophic) → always ask
 
     base = os.path.basename(real[0].lstrip("\\"))
     args = real[1:]
+
+    _shape = _unsafe_shape(base, args)
+    if _shape:
+        return DECISION_ASK
 
     if args and all(a in HELP_VERSION for a in args):
         return DECISION_ALLOW
@@ -396,6 +468,14 @@ _SECRET_PATH_MARKERS = (
     ".env", ".age", "age/keys", ".pem", ".key", ".p12", ".pfx", ".jks", ".keystore",
     "keychain", "secring", "gnupg", "_secrets", "/secrets", "vault", "token", "secret",
     ".zshenv", ".bash_history", ".zsh_history", "wg0.conf", "wireguard",
+    # Added 2026-09-07. A review found the list caught `echo $SECRET` and `$AWS_SECRET_ACCESS_KEY`
+    # while `echo $OPENAI_API_KEY` and `echo $GH_PAT` went straight through, so the README's own
+    # example of this gap was the one shape the list happened to cover. These are the names that
+    # actually appear on credentials in the wild.
+    "api_key", "apikey", "_pat", "access_key", "private_key", "client_secret",
+    "passwd", "password", "passphrase", "session_key", "refresh_token", "bearer",
+    # `.ssh/id_` misses a glob, because a glob has no substring to match.
+    ".ssh/",
 )
 _ENV_DUMPERS = ("printenv", "env")
 
@@ -654,6 +734,35 @@ def main():
 # ── self-test (adversarial battery) ──────────────────────────────────────────
 
 SELFTEST = [
+    # ── SR-321, added 2026-09-07 after an adversarial pass reported them as wrong-ALLOWs.
+    # Each one reached an allow through a safe-list that answered the wrong question. The three
+    # `-c` cases execute arbitrary code: git runs the program these config keys name.
+    ("git -c diff.external=/tmp/x.sh diff HEAD~1", "ask"),
+    ("git -c core.fsmonitor=/tmp/x.sh status", "ask"),
+    ("git -c core.pager=/tmp/x.sh log", "ask"),
+    ("git remote set-url origin https://example.invalid/r.git", "ask"),
+    ("git remote remove origin", "ask"),
+    ("git branch -D feature", "ask"),
+    ("git branch -f main HEAD~5", "ask"),
+    ("git reflog expire --expire=now --all", "ask"),
+    ("sort --output=/tmp/x /etc/hosts", "ask"),
+    ("sort --output /tmp/x /etc/hosts", "ask"),
+    ("env -0", "ask"),
+    ("printenv -0", "ask"),
+    ("shutdown -h", "ask"),
+    # The other half of each rule: the read-only form must survive, or the fix is a new defect.
+    ("echo $OPENAI_API_KEY", "ask"),
+    ("echo $GH_PAT", "ask"),
+    ("cat ~/.ssh/*", "ask"),
+    ("dd if=/dev/rdisk8 of=/dev/null bs=1m count=16", "ask"),
+    ("dd if=/dev/zero of=/dev/rdisk8", "deny"),
+    ("git diff HEAD~1", "allow"),
+    ("git remote -v", "allow"),
+    ("git branch --list", "allow"),
+    ("git reflog", "allow"),
+    ("sort /etc/hosts", "allow"),
+    ("env FOO=1 ls -la", "allow"),
+
     # ── legit reads → allow ──
     ("ls -la", "allow"),
     ("cat foo.txt", "allow"),

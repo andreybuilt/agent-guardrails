@@ -100,17 +100,27 @@ diskutil eraseDisk FAT32 BLANK MBRFormat /dev/disk8 && echo "---VERIFY---" && di
 ```
 Reason given: `diskutil (format/erase filesystem)`. This would have erased a disk.
 
-**2. An over-block, and it teaches more than the catch.**
+**2. An over-block, and my explanation of it was wrong about my own code.**
 ```
 dd if=/dev/rdisk8 of=/dev/null bs=1m count=16
 ```
-Reason given: `dd writing to a raw device`. The command *reads* from a raw device into
-`/dev/null`, which is harmless. My rule matched `dd` beside a raw device path without checking
-which side of the operation the device sat on.
+Reason given: `dd writing to a raw device`. The command reads a raw device into `/dev/null`, which
+destroys nothing.
 
-That limitation is still unfixed here. It also shows the design working: when the classifier gets
-it wrong, the cost is a retry rather than a disk. Expect a guard tightened this far to over-block
-sometimes.
+For most of a day this README said the rule "matched `dd` beside a raw device path without checking
+which side of the operation the device sat on." **That was false, and an adversarial reviewer caught
+it by reading the code I had described.** The rule is `of=/dev/`. It always checked the side; reading
+a raw device was never the trigger. What it did not do was tell a device from a sink, so every
+`/dev/` write target was treated as a disk, including the one that is a hole in the ground.
+
+Fixed 2026-09-07: `/dev/null`, `/dev/stdout`, `/dev/stderr`, `/dev/tty` and `/dev/zero` are sinks and
+no longer trip it, while `dd if=/dev/zero of=/dev/rdisk8` still denies. Both directions are cases 
+in the battery.
+
+I have left this section in rather than quietly deleting it, because the interesting part is no
+longer the over-block. It is that a guard's author can describe his own rule incorrectly for hours
+while the code sits three lines away, and that the error survived every check I ran on it. Nobody
+verifies a sentence about a mechanism the way they verify the mechanism.
 
 ---
 
@@ -170,7 +180,7 @@ temporary repositories and drives the hook through both halves of every rule: si
 must refuse, and seven wrongly-satisfied twins it must allow. Three of those seven are false
 positives the hook shipped with and had fixed within a day.
 
-`bash-approver.py --selftest` runs an **85-case adversarial battery** and exits non-zero on any
+`bash-approver.py --selftest` runs an **109-case adversarial battery** and exits non-zero on any
 wrong-allow. Each case entered the battery after a bypass got through, so they are regression
 tests rather than illustrations. The battery covers newline-separated segments, `&&`/`||`/`;`/`|`
 sequencing, redirect targets, `env`/`sudo`/`nice` wrapper prefixes, `$()` and heredocs, and quoted
@@ -189,13 +199,32 @@ what survived that pass, and it is shorter than the list of what did not.
 |---|---|---|
 | `guard-sequenced-precondition.py` | `sh -c '...'`, `bash -c '...'`, `ssh host '...'`, a single `&` | Only the first operator at the top level is examined; a wrapper hides the sequence inside an argument. |
 | `guard-sequenced-precondition.py` | `"lease.sh" acquire`, `l\ease.sh acquire`, `lease.sh 'acquire'` | The precondition is matched as text, so quoting or escaping the command name defeats the matcher while the shell still runs the real thing. |
-| `bash-approver.py` | `git branch -D`, `git remote set-url`, `git reflog expire` | Its safe-subcommand table treats `branch`, `remote` and `reflog` as read-only. They are not. `git remote set-url origin <url>` is the sharpest of these: it silently redirects your next push. |
-| `bash-approver.py` | `git show --output=FILE`, `git log --output=FILE`, `file -C -m FILE` | Read-only-looking subcommands that write through a flag the redirect analysis does not model. |
-| `bash-approver.py` | `echo $SECRET` | It models side effects, not disclosure. A design boundary, stated in the source. |
+| `bash-approver.py` | anything a safe-list answers the wrong question about | The class stays open even though every reported instance is closed. A list that answers "is this subcommand read-only" cannot see danger that lives in an option. |
+| `bash-approver.py` | `file -C -m FILE` | A read-only-looking command that writes through a flag the redirect analysis does not model. The `git --output=` and `sort --output=` forms of this were closed 2026-09-07. |
+| `bash-approver.py` | disclosure through a variable name the marker list does not carry | It matches credential-shaped NAMES, so it catches what it has seen. `echo $SECRET` was the example this README used, and a reviewer found that example is one of the cases it already blocks, while `echo $OPENAI_API_KEY` and `echo $GH_PAT` went through. Those are now covered; the class is open by construction. |
 | `orphan-tooling-guard.py` | anything five directories deep, `.pl`, `.rb`, extensionless | The walk stops at depth 5, and it hashes `.sh` and `.py` only. |
 | `guard-agent-model.py` | `model="inherit"` | It requires a non-empty model and does not validate the value. |
 
-### What that pass closed, because the failures are the useful part
+### What a second pass closed, and the one that should not have been possible
+
+A separate reviewer attacked the classifier itself and found **nine wrong-ALLOWs**, which is the
+outcome this repository calls the only unacceptable one. Three of them ran arbitrary code:
+
+    git -c diff.external=/tmp/x.sh diff        git -c core.fsmonitor=/tmp/x.sh status
+    git -c core.pager=/tmp/x.sh log
+
+`git diff` is read-only. `git -c diff.external=X diff` runs `X`. The subcommand parser skipped `-c`
+and its value **in order to find the subcommand**, which is exactly what made the dangerous option
+invisible to the check that followed. The others: `sort --output=` (the short form was caught and
+the long form starts with `--`, not `-o`), `git remote set-url`, `git branch -D`, `git reflog
+expire`, `env -0`, and `shutdown -h`, which read as a request for help because `-h` is in the
+help-flag set.
+
+All nine are closed and all nine are now battery cases, which is why the count is 109 rather than
+85. The lesson is the one this whole file keeps circling: a safe-list answers a question about the
+subcommand, and the danger was in an option nobody asked it about.
+
+### What the first pass closed, because the failures are the useful part
 
 `guard-git.py` had published **no** bypass list, and it had four holes plus one I found writing the
 control case for the others:
