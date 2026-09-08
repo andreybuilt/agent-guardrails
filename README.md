@@ -6,10 +6,11 @@ Six hooks that refuse unsafe agent actions instead of warning about them afterwa
 `PreToolUse` and stop the command **before it executes**; one runs as `Stop` and sends the turn back.
 They refuse in three different ways, which turns out to matter more than it sounds like it should.
 
-**These six are the ones that generalize.** Others run on the fleet this came from and stay there:
-two are bound to my own paths and hosts, one to a single internal API's schema, and `one-step-guard.py`
-is the subject of the last section. A sixth published here, `guard-sequenced-precondition.py`, runs on
-no machine at all: it is the generalized form of a hook that guarded one specific distributed lock,
+**These six are the ones that generalize.** Others run on the fleet this came from and stay there,
+because they encode host paths, lease targets and one internal API's schema. `one-step-guard.py` is
+also held back, for the reason in the last section. One published here,
+`guard-sequenced-precondition.py`, runs on no machine at all: it is the generalized form of a hook
+that guarded one specific distributed lock,
 rewritten around a configurable pattern. Its error text still says `guard-lease`, which is where it
 came from.
 
@@ -48,8 +49,10 @@ considered from a hook that is not there.
 This is the same failure the hooks themselves are built around: the check and the claim being about
 different things. It showed up in the accounting of the hooks before it showed up in the hooks.
 
-Every hook here runs in production against a real agent workload. The numbers below come from its
-own logs, not from a benchmark built to make the point.
+**Five of the six run in production** against a real agent workload; `guard-sequenced-precondition.py`
+is the generalized rewrite described above and runs nowhere, which is why no production number is
+claimed for it. The figures below come from `bash-approver.py`'s own decision log, not from a
+benchmark built to make the point, and they describe that hook rather than the set.
 
 ---
 

@@ -1,4 +1,11 @@
 {
+  "_comment": [
+    "Wiring for the six hooks. The event matters: orphan-tooling-guard.py is a Stop hook, not",
+    "PreToolUse, and wiring it under PreToolUse means it never sees the event it inspects. An",
+    "earlier version of this file did exactly that, so anyone following it installed one hook",
+    "into a position where it silently did nothing.",
+    "Each hook states its own event in its docstring. Trust that over this file."
+  ],
   "hooks": {
     "PreToolUse": [
       {
@@ -6,14 +13,21 @@
         "hooks": [
           { "type": "command", "command": "$HOME/.claude/hooks/bash-approver.py" },
           { "type": "command", "command": "$HOME/.claude/hooks/guard-find.sh" },
-          { "type": "command", "command": "$HOME/.claude/hooks/guard-sequenced-precondition.py" },
-          { "type": "command", "command": "$HOME/.claude/hooks/orphan-tooling-guard.py" }
+          { "type": "command", "command": "$HOME/.claude/hooks/guard-git.py" },
+          { "type": "command", "command": "$HOME/.claude/hooks/guard-sequenced-precondition.py" }
         ]
       },
       {
         "matcher": "Agent",
         "hooks": [
           { "type": "command", "command": "$HOME/.claude/hooks/guard-agent-model.py" }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          { "type": "command", "command": "$HOME/.claude/hooks/orphan-tooling-guard.py" }
         ]
       }
     ]

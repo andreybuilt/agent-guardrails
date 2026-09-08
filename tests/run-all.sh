@@ -22,6 +22,10 @@ else
 fi
 
 echo
+echo "== settings.example.json wiring =="
+if python3 tests/test-settings-example.py; then :; else fail=1; fi
+
+echo
 echo "== guard-find matrix =="
 if ./tests/test-guard-find.sh; then
   echo "  guard-find matrix passed"
