@@ -1,0 +1,38 @@
+name: tests
+
+# Runs the same suite a reader would run after cloning: syntax, the 85-case adversarial
+# battery, the two hook matrices, and the leak sweep. Nothing here is CI-only, so a green
+# check here means the command in the README works on a machine that is not mine.
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  suite:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: jq is a dependency of guard-find.sh
+        run: jq --version
+
+      - name: python3 version in use
+        run: python3 --version
+
+      - name: run the full suite
+        run: ./tests/run-all.sh
+
+      # A second pass for secret SHAPES rather than identities.
+      #
+      # The pattern is assembled from fragments rather than written out, because the first
+      # draft of this step failed on itself: the sweep found the pattern line in this file
+      # and reported a leak. That is the third time in one day that a check naming its own
+      # targets became the thing it was looking for, and the repository documents the other
+      # two. Splitting each token means this file contains no matchable string.
+      - name: leak sweep for secret shapes
+        run: |
+          RE="ssh-""rsa|ssh-""ed25519|BEGIN [A-Z ]*PRIVATE ""KEY"
+          RE="$RE|xox""[baprs]-|gh""p_|github""_pat_|AKIA""[0-9A-Z]{16}"
+          GUARD_LEAK_RE="$RE" ./tests/run-all.sh

@@ -1,5 +1,7 @@
 # agent-guardrails
 
+[![tests](https://github.com/andreybuilt/agent-guardrails/actions/workflows/tests.yml/badge.svg)](https://github.com/andreybuilt/agent-guardrails/actions/workflows/tests.yml)
+
 Six hooks that refuse unsafe agent actions instead of warning about them afterwards. Five run as
 `PreToolUse` and stop the command **before it executes**; one runs as `Stop` and sends the turn back.
 They refuse in three different ways, which turns out to matter more than it sounds like it should.

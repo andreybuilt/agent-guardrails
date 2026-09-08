@@ -147,3 +147,4 @@ chosen. The agent behaved reasonably in each one.
 
 So I judge every hook here by a single question. Not "does it catch bad commands", but: what is the
 exact input that gets past it, and does the test file contain that input?
+
