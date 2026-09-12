@@ -1,4 +1,4 @@
-# agent-guardrails
+# AB.Agentic Runtime Guardrails
 
 [![tests](https://github.com/andreybuilt/agent-guardrails/actions/workflows/tests.yml/badge.svg)](https://github.com/andreybuilt/agent-guardrails/actions/workflows/tests.yml)
 
