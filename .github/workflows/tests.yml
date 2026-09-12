@@ -1,6 +1,6 @@
 name: tests
 
-# Runs the same suite a reader would run after cloning: syntax, the 85-case adversarial
+# Runs the same suite a reader would run after cloning: syntax, the 108-case adversarial
 # battery, the two hook matrices, and the leak sweep. Nothing here is CI-only, so a green
 # check here means the command in the README works on a machine that is not mine.
 on:
