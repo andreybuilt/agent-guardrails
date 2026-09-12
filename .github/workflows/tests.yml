@@ -9,11 +9,22 @@ on:
   pull_request:
   workflow_dispatch:
 
+# The suite checks out and runs tests. It writes nothing, opens no issue, publishes no
+# package -- so GITHUB_TOKEN needs read access to the contents and nothing else. Without
+# this block the token takes the ACCOUNT default, which is not visible from this file and
+# can be widened elsewhere without anyone editing the workflow.
+permissions:
+  contents: read
+
 jobs:
   suite:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      # Pinned to a SHA, not the v4 tag. A floating tag means whatever commit that tag
+      # points at TODAY executes here -- the supply-chain hole this repository exists to
+      # argue about. This SHA is what v4 resolved to on 2026-09-11, so pinning freezes
+      # what was already running rather than changing it.
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
       - name: jq is a dependency of guard-find.sh
         run: jq --version
