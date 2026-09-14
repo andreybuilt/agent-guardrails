@@ -121,7 +121,7 @@ def _segment(command: str):
         while k < n and command[k] in " \t":
             k += 1
         # fd-dup: >&1, >&2, 1>&2, >&-  → safe
-        # SR-297a: a genuine fd-dup is >&1 / 2>&1 / >&- ; `>&word` REDIRECTS TO A FILE.
+        # Redirect fix (a): a genuine fd-dup is >&1 / 2>&1 / >&- ; `>&word` REDIRECTS TO A FILE.
         # Proven: zsh -c 'ls >&w1.txt' wrote 26 bytes while this returned "safe".
         # zsh MULTIOS also writes for `2>&file`, which bash rejects.
         if k < n and command[k] == "&":
@@ -137,7 +137,7 @@ def _segment(command: str):
             k += 1
         target = command[t0:k]
         cur.append(command[op_start:k])
-        if target == "" or target == "/dev/null":   # SR-297d: no prefix match
+        if target == "" or target == "/dev/null":   # redirect fix (d): no prefix match
             return k, None
         if re.match(r"/dev/(sd|disk|rdisk|nvme|hd)", target):
             return k, ("deny", "redirect to a raw disk device")
@@ -193,7 +193,7 @@ def _tokenize(seg: str):
 
 # ── wrapper / sudo stripping ─────────────────────────────────────────────────
 
-# SR-297c. A denylist is incomplete by construction and is chosen anyway: a name
+# Env-prefix fix (c). A denylist is incomplete by construction and is chosen anyway: a name
 # ALLOWLIST costs all 661 historical allows carrying an assignment, this costs ZERO
 # of them (every observed name was a short path var: R, F, M, d, D, S, SP, ROOT...).
 _ENV_UNSAFE_EXACT = {"PATH", "IFS", "ENV", "BASH_ENV", "SHELL", "SHELLOPTS",
@@ -216,7 +216,7 @@ def _strip_prefixes(argv):
         tok = argv[i]
         _m_env = re.fullmatch(r"([A-Za-z_][A-Za-z0-9_]*)=.*", tok)   # FOO=bar
         if _m_env:
-            # SR-297c: an env assignment is NOT inert. PATH= changes which binary runs;
+            # Env-prefix fix (c): an env assignment is NOT inert. PATH= changes which binary runs;
             # GIT_EXTERNAL_DIFF / PAGER / LESSOPEN execute a command of the caller's
             # choosing. Proven: GIT_EXTERNAL_DIFF=x git diff ran the script on a pipe.
             if _env_name_unsafe(_m_env.group(1)):
@@ -326,7 +326,7 @@ def _git_subcommand(args):
 
 
 def _writes_despite_always_safe(base, args) -> bool:
-    """SR-297b. Members of ALWAYS_SAFE that write given the right arguments."""
+    """Safe-list fix (b). Members of ALWAYS_SAFE that write given the right arguments."""
     if base == "sort" and any(a == "-o" or a.startswith("-o") for a in args):
         return True
     if base == "yq" and any(a in ("-i", "--inplace") for a in args):
@@ -337,7 +337,7 @@ def _writes_despite_always_safe(base, args) -> bool:
 
 
 
-# ── SR-321: shapes that reach an ALLOW through a safe-list, found by adversarial review ──────
+# ── Adversarial review 2026-09-07: shapes that reach an ALLOW through a safe-list, found by adversarial review ──────
 # Every one of these was reported ALLOW on 2026-09-07 by a pass that was handed the published
 # bypass table and told to find what was not in it. Three of them execute arbitrary code.
 #
@@ -418,7 +418,7 @@ def _classify_segment(argv):
     if args and all(a in HELP_VERSION for a in args):
         return DECISION_ALLOW
 
-    # SR-297b: these live in ALWAYS_SAFE, whose contract is "side-effect-free
+    # Safe-list fix (b): these live in ALWAYS_SAFE, whose contract is "side-effect-free
     # regardless of args", and they WRITE with the right args. Proven:
     # `sort -o victim.txt src.txt` overwrote a file reading PROTECTED-ORIGINAL.
     if _writes_despite_always_safe(base, args):
@@ -451,7 +451,7 @@ def _classify_segment(argv):
 
 # ── top-level decision ───────────────────────────────────────────────────────
 
-# --- SR-147: disclosure, not side effects ------------------------------------
+# --- Disclosure rule: disclosure, not side effects ------------------------------------
 # Ported between seats 2026-09-06. It shipped on the first seat 2026-08-31; the others never
 # picked it up because it landed as a mirrored copy rather than in the owning
 # project. Verified before the port: `cat ~/.ssh/id_rsa` returned ALLOW on both.
@@ -460,7 +460,7 @@ def _classify_segment(argv):
 # Deliberately a SUBSTRING match rather than realpath(): realpath touches the
 # filesystem and would let a symlink decide the verdict. Known NOT to catch symlink
 # aliasing (`cat ~/mykey`) or environment disclosure (`echo $SOME_KEY`): both are
-# recorded on SR-147 rather than papered over.
+# recorded as a known limit rather than papered over.
 _SECRET_PATH_MARKERS = (
     ".ssh/id_", ".ssh/identity", "authorized_keys", "known_hosts",
     ".claude.json", ".claude/settings", "credstore", "credentials",
@@ -489,13 +489,13 @@ def _disclosure_risk(segs):
         base = os.path.basename(argv[0])
         if base in _ENV_DUMPERS and not any(a.startswith("-") and a != "-" for a in argv[1:]):
             return ("`%s` dumps the whole environment, where bearer tokens live "
-                    "(SR-147 / SR-176)" % base)
+                    "(disclosure rule)" % base)
         for a in argv[1:]:
             low = a.lower()
             for m in _SECRET_PATH_MARKERS:
                 if m in low:
                     return ("reads a secret-bearing path (matched %r) - side-effect-free "
-                            "but DISCLOSING; SR-147" % m)
+                            "but DISCLOSING" % m)
     return None
 
 
@@ -543,7 +543,7 @@ def decide(command: str):
             return DECISION_DENY, v[1]
         verdicts.append(v)
     if all(v == DECISION_ALLOW for v in verdicts):
-        _d = _disclosure_risk(segs)      # SR-147: side-effect-free but DISCLOSING
+        _d = _disclosure_risk(segs)      # disclosure rule: side-effect-free but DISCLOSING
         if _d:
             return DECISION_ASK, _d
         return DECISION_ALLOW, "all segments are read-only / side-effect-free"
@@ -562,7 +562,7 @@ _INTERP_NEEDS_INLINE = {"python", "python3", "python2", "perl", "ruby", "node", 
                         "php", "lua"}
 
 
-# Per-interpreter INLINE-CODE flags. SR-202: the old check accepted any arg starting with
+# Per-interpreter INLINE-CODE flags. Interpreter-flag fix: the old check accepted any arg starting with
 # -c/-e/-E for every interpreter, so `python3 -E file.py` (-E is an env flag carrying no
 # code) promoted a FILE the gate cannot read. A flag now counts as inline only for the
 # interpreters where it actually carries code, and it must appear BEFORE any file arg.
@@ -595,7 +595,7 @@ def _inline_invocation(base: str, args) -> bool:
 
 
 def _promotable(command: str) -> bool:
-    # SR-147: whatever the model votes, a read of a secret-bearing path must reach
+    # Disclosure rule: whatever the model votes, a read of a secret-bearing path must reach
     # a human. `cat` is in ALWAYS_SAFE, so the loop below would `continue` past it,
     # re-importing the exact assumption this gate exists to break.
     if _disclosure_risk(_segment(command)[0] or []):
@@ -603,7 +603,7 @@ def _promotable(command: str) -> bool:
     """True only if EVERY segment is a clean, inline interpreter/expression command with
     no redirect/sudo/mutation-flag. Network/transfer/package/service/file bases are excluded
     by construction (they're simply not in _PROMOTABLE_BASES)."""
-    # SR-298 carrier: _tokenize runs shlex with comments off and the loop below never
+    # Model-reply fix, carrier: _tokenize runs shlex with comments off and the loop below never
     # inspects trailing tokens, so `python3 -c "..." # <payload>` feeds the model text
     # the SHELL DISCARDS. Refusing promotion closes it model-independently.
     if _has_unquoted_hash(command):
@@ -636,13 +636,13 @@ def _promotable(command: str) -> bool:
 # ── optional model promoter (gray → allow), fail-closed ──────────────────────
 
 def _verdict_ok(out: str) -> bool:
-    """True only if the model's FIRST TOKEN is exactly SAFE. SR-298."""
+    """True only if the model's FIRST TOKEN is exactly SAFE (model-reply fix)."""
     tok = (out or "").strip().upper().strip(" \t\r\n.:!?,;_-\"'`")
     return tok.split()[0] == "SAFE" if tok.split() else False
 
 
 def _has_unquoted_hash(command: str) -> bool:
-    """True if a `#` appears outside quotes. SR-298 carrier: shlex runs with
+    """True if a `#` appears outside quotes. Model-reply fix, carrier: shlex runs with
     comments off, so `python3 -c "..." # <payload>` feeds the model text the SHELL
     DISCARDS. Refusing promotion on it closes the carrier model-independently."""
     q = None
@@ -680,7 +680,7 @@ def _model_promote(command: str) -> bool:
                                      headers={"Content-Type": "application/json"})
         with urllib.request.urlopen(req, timeout=8) as r:
             out = json.loads(r.read().decode()).get("response", "")
-        # SR-298: a PREFIX match promotes any reply beginning "SAFE": including
+        # Model-reply fix: a PREFIX match promotes any reply beginning "SAFE": including
         # "SAFETY: UNSAFE", "SAFE? UNSAFE" and "SAFE_NO", where the model answered
         # CORRECTLY and the comparison discarded its answer. Measured: 20 live
         # false-SAFE -> 2. A more capable model makes the prefix bug WORSE, because
@@ -734,7 +734,7 @@ def main():
 # ── self-test (adversarial battery) ──────────────────────────────────────────
 
 SELFTEST = [
-    # ── SR-321, added 2026-09-07 after an adversarial pass reported them as wrong-ALLOWs.
+    # ── Added 2026-09-07 after an adversarial pass reported them as wrong-ALLOWs.
     # Each one reached an allow through a safe-list that answered the wrong question. The three
     # `-c` cases execute arbitrary code: git runs the program these config keys name.
     ("git -c diff.external=/tmp/x.sh diff HEAD~1", "ask"),
@@ -844,7 +844,7 @@ SELFTEST = [
 
 
 ENVELOPE_SELFTEST = [
-    # SR-202 known-bads: MUST be excluded from promotion
+    # Interpreter-flag fix, known-bads: MUST be excluded from promotion
     ("python3 -E evil.py", False),
     ("python3 -I evil.py", False),
     ("python3 -S evil.py", False),
