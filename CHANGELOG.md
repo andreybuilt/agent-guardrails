@@ -2,6 +2,14 @@
 
 All notable changes to this project. Dates are the day the change was published.
 
+## [Unreleased]
+
+### Added
+
+- `docs/adr/0001-ambiguity-resolves-to-ask.md`: the decision record for the classifier's core rule.
+- `docs/demo/`: a replay of seven real hook decisions (`demo.py`, `render_svg.py`, `demo.svg`), shown in
+  the README. The suite fails if the image stops matching what the hooks decide.
+
 ## [1.0.0] - 2026-09-14
 
 First tagged release. What it contains:

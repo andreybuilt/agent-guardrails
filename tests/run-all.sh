@@ -46,6 +46,10 @@ echo "== adversarial corpus (bypasses reported against these hooks) =="
 if python3 tests/adversarial/verify_reported.py; then :; else fail=1; fi
 
 echo
+echo "== demo replay matches the hooks =="
+if python3 docs/demo/render_svg.py --check; then :; else fail=1; fi
+
+echo
 echo "== no leaked identifiers =="
 # Built at run time so this file never itself contains a real identifier, and so a fork
 # checks ITS author's name rather than ours. Override with GUARD_LEAK_RE to add your own.
