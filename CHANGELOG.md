@@ -2,7 +2,7 @@
 
 All notable changes to this project. Dates are the day the change was published.
 
-## [Unreleased]
+## [1.1.0] - 2026-09-22
 
 ### Changed
 
@@ -73,4 +73,5 @@ First tagged release. What it contains:
 
 Published in the README and unchanged by this release.
 
+[1.1.0]: https://github.com/andreybuilt/agent-guardrails/releases/tag/v1.1.0
 [1.0.0]: https://github.com/andreybuilt/agent-guardrails/releases/tag/v1.0.0
