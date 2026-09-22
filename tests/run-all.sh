@@ -5,13 +5,17 @@ cd "$(dirname "$0")/.." || exit 1
 fail=0
 
 echo "== syntax =="
-for f in hooks/*.py; do
+for f in hooks/*.py src/bash_approver/*.py; do
   python3 -m py_compile "$f" && echo "  ok    $f" || { echo "  FAIL  $f"; fail=1; }
 done
 for f in hooks/*.sh; do
   bash -n "$f" && echo "  ok    $f" || { echo "  FAIL  $f"; fail=1; }
 done
-rm -rf hooks/__pycache__
+# py_compile writes .pyc files that embed the absolute source path, i.e. a real username.
+# The leak sweep at the bottom of this file scans content including binaries, so leaving
+# them behind fails the sweep on the checker's own artefacts. Clear every one, not just
+# the hooks directory, which is what the earlier single-path rm did.
+find . -name __pycache__ -type d -prune -exec rm -rf {} + 2>/dev/null || true
 
 echo
 echo "== bash-approver adversarial battery =="

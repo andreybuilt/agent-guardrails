@@ -59,6 +59,24 @@ by default and fails closed.
 The other five hooks each refuse one narrow shape and let its harmless twin through. They are
 listed in the [catalogue](#guardrail-catalogue).
 
+### Where each step lives
+
+Every box in that diagram is a module. `hooks/bash-approver.py` is the entry point and holds no
+rules: it reads the host's JSON, calls `decide()`, and writes the host's JSON back.
+
+| Module | Answers |
+|---|---|
+| `src/bash_approver/segmentation.py` | Where does one command end and the next begin, and what did the shell do to the text before any of it ran. Owns the redirect verdict, because deciding it needs the quote state the scanner already has. |
+| `src/bash_approver/command_model.py` | Given one segment, what actually runs once env-assignments, wrappers and `sudo` are peeled off the front. `env FOO=1 sudo nice rm -rf ~` is an `rm`. |
+| `src/bash_approver/destructive.py` | Is this catastrophic regardless of what any safe-list says. The only module allowed to return DENY. |
+| `src/bash_approver/policy.py` | Allow, ask or deny, plus the envelope bounding what the optional model may promote. |
+| `src/bash_approver/model_promoter.py` | The optional local model. The only network I/O in the classifier, kept separate so the trust boundary is visible. |
+| `src/bash_approver/decision_log.py` | Append-only JSONL telemetry. Never affects a decision. |
+| `src/bash_approver/selftest.py` | Runs the battery in `tests/fixtures/bash_approver_cases.json`. |
+
+The order those run in is the load-bearing part, and it is stated at the top of `policy.py`
+rather than left to be inferred. Standard library only, in every module.
+
 ---
 
 ## Quick start
@@ -66,13 +84,20 @@ listed in the [catalogue](#guardrail-catalogue).
 ```bash
 git clone https://github.com/andreybuilt/agent-guardrails
 cd agent-guardrails && ./tests/run-all.sh
-mkdir -p ~/.claude/hooks && cp hooks/* ~/.claude/hooks/ && chmod +x ~/.claude/hooks/*
+mkdir -p ~/.claude/hooks && cp -R hooks/* src/bash_approver ~/.claude/hooks/ && chmod +x ~/.claude/hooks/*
 # then merge settings.example.json into your agent's settings
 ```
 
 `guard-find.sh` needs `jq` and `python3`. Every Python hook needs only the standard library.
 The wiring, including which event each hook belongs to, is in
 [`settings.example.json`](settings.example.json).
+
+`bash-approver.py` is an entry point over the `bash_approver` package, which is why the copy
+takes `src/bash_approver` as well and why it is `cp -R`. The hook looks for the package beside
+itself first and in `../src` second, so the flat install above and a plain checkout both work
+with no `PYTHONPATH` and no install step. The five other hooks are single files and are copied
+by the same command. `--selftest` reads its cases from `tests/`, which the flat install does not
+copy, so run the battery from the checkout.
 
 ---
 
@@ -159,6 +184,14 @@ wrong-allow. Each case entered the battery after a bypass got through, so they a
 tests rather than illustrations. The battery covers newline-separated segments, `&&`/`||`/`;`/`|`
 sequencing, redirect targets, `env`/`sudo`/`nice` wrapper prefixes, `$()` and heredocs, and quoted
 strings that only look dangerous (`echo 'rm -rf /'` has to stay allowed).
+
+The cases are data, and they live in
+[`tests/fixtures/bash_approver_cases.json`](tests/fixtures/bash_approver_cases.json) rather than
+inside the hook, so the classifier reads as code and the battery reads as a corpus. Each case
+keeps the group label it had as a comment, so it is still obvious which bypass it came from.
+Four of them target the user's own home directory and store it as the token `{HOME}`, expanded at
+load time: writing the real path into the file would put a username into the repository, which
+the suite's own leak sweep refuses.
 
 `guard-git.py` carries a **13-case matrix** in `tests/test-guard-git.sh` that builds real
 temporary repositories and drives the hook through both halves of every rule: six commands it
